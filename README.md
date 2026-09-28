@@ -1,10 +1,10 @@
 # Codex 周额度
 
-macOS 26+ / Apple Silicon 原生 SwiftUI 应用与 WidgetKit 桌面小组件。
+macOS 26+ / arm64 + x86_64 原生 SwiftUI 应用与 WidgetKit 桌面小组件。
 
 ## 当前版本
 
-1.1.1（build 8）。修复新版 ChatGPT 内置 Codex 路径变化；连接设置使用 macOS 原生选择窗口，支持选择应用或 CLI，详见「安装说明.md」。
+1.1.2（build 9）。修复新版 ChatGPT 内置 Codex 路径变化；连接设置使用 macOS 原生选择窗口，支持选择应用或 CLI，详见「安装说明.md」。
 
 应用保持运行时每 5 分钟同步，可关闭窗口继续后台运行。小组件刷新由 macOS 调度，可能晚于应用同步。
 
@@ -56,3 +56,21 @@ SIGN_IDENTITY='Apple Development: Your Name (TEAMID)' ./build.sh
 
 - [Codex App Server：额度接口](https://learn.chatgpt.com/docs/app-server)
 - [Apple：小组件着色模式与 Liquid Glass](https://developer.apple.com/documentation/widgetkit/optimizing-your-widget-for-accented-rendering-mode-and-liquid-glass)
+
+## 迁移与正式分发
+
+`build.sh` 构建 Universal 应用和扩展并开启 Hardened Runtime；没有指定 SIGN_IDENTITY 时仍是临时签名开发包。用户包只含应用、安装/刷新工具和说明；不携带凭据、缓存或个人配置。安装工具提供 `--check` 只读检查模式。
+
+正式分发必须使用自己的 Developer ID Application 证书及已配置的 notarytool Keychain profile。不要在脚本中写入密码或私钥：
+
+```sh
+SIGN_IDENTITY='Developer ID Application: Your Name (TEAMID)' ./build.sh
+NOTARY_PROFILE='your-existing-profile' ./scripts/notarize.sh '/absolute/build/path/Codex 周额度.app'
+./scripts/package.sh '/absolute/build/path/Codex 周额度.app' '/absolute/output/CodexQuota-最新版安装包.zip'
+```
+
+先等待公证 Accepted、stapler 验证和 Gatekeeper 评估通过，再打最终安装包。本机没有可用签名证书，因此此流程尚未实际完成；不能声称当前 zip 已公证。还需在另一台无既有安装/许可记录的 Mac 上验收。
+
+### 1.1.2 验证记录
+
+主应用和扩展的 arm64 / x86_64 构建、签名完整性、系统库依赖检查、打包解压与安装前检查均通过。Hardened Runtime 构建已在本机运行，主应用服务和桌面小组件缓存的同步记录一致。公证脚本会拒绝临时签名应用，已验证该保护。没有第二台 Mac / Intel 实机，因此没有声称完成跨设备实测或 Apple 公证。

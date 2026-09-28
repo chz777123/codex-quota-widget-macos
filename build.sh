@@ -12,9 +12,16 @@ mkdir -p "$APP/Contents/Resources" "$EXT/Contents/Resources"
 cp Assets/AppIcon-rounded.icns "$APP/Contents/Resources/QuotaAppIcon-v6.icns"
 cp Assets/AppIcon-rounded.icns "$EXT/Contents/Resources/QuotaAppIcon-v6.icns"
 python3 scripts/metadata.py "$APP" "$EXT" "$APP_GROUP" "$BUILD_DIR"
-xcrun swiftc -swift-version 5 -parse-as-library -O -target arm64-apple-macos26.0 Sources/Quota.swift Sources/CodexClient.swift Sources/CodexLocation.swift Sources/LocalQuotaServer.swift Sources/QuotaView.swift Sources/QuotaApp.swift -o "$APP/Contents/MacOS/CodexQuota"
-xcrun swiftc -swift-version 5 -parse-as-library -application-extension -Xlinker -e -Xlinker _NSExtensionMain -O -target arm64-apple-macos26.0 Sources/Quota.swift Sources/QuotaView.swift Sources/QuotaWidget.swift -o "$EXT/Contents/MacOS/CodexQuotaWidget"
-codesign --force --sign "$SIGN_IDENTITY" --entitlements "$BUILD_DIR/widget.entitlements" "$EXT"
-codesign --force --sign "$SIGN_IDENTITY" --entitlements "$BUILD_DIR/app.entitlements" "$APP"
+for arch in arm64 x86_64; do
+    mkdir -p "$BUILD_DIR/$arch"
+    xcrun swiftc -swift-version 5 -parse-as-library -O -target "$arch-apple-macos26.0" Sources/Quota.swift Sources/CodexClient.swift Sources/CodexLocation.swift Sources/LocalQuotaServer.swift Sources/QuotaView.swift Sources/QuotaApp.swift -o "$BUILD_DIR/$arch/CodexQuota"
+    xcrun swiftc -swift-version 5 -parse-as-library -application-extension -Xlinker -e -Xlinker _NSExtensionMain -O -target "$arch-apple-macos26.0" Sources/Quota.swift Sources/QuotaView.swift Sources/QuotaWidget.swift -o "$BUILD_DIR/$arch/CodexQuotaWidget"
+done
+xcrun lipo -create "$BUILD_DIR/arm64/CodexQuota" "$BUILD_DIR/x86_64/CodexQuota" -output "$APP/Contents/MacOS/CodexQuota"
+xcrun lipo -create "$BUILD_DIR/arm64/CodexQuotaWidget" "$BUILD_DIR/x86_64/CodexQuotaWidget" -output "$EXT/Contents/MacOS/CodexQuotaWidget"
+sign_options=(--options runtime)
+if [[ "$SIGN_IDENTITY" != "-" ]]; then sign_options+=(--timestamp); fi
+codesign --force --sign "$SIGN_IDENTITY" "${sign_options[@]}" --entitlements "$BUILD_DIR/widget.entitlements" "$EXT"
+codesign --force --sign "$SIGN_IDENTITY" "${sign_options[@]}" --entitlements "$BUILD_DIR/app.entitlements" "$APP"
 codesign --verify --deep --strict "$APP"
 printf 'Built: %s\n' "$APP"
