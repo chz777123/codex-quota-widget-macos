@@ -74,3 +74,9 @@ NOTARY_PROFILE='your-existing-profile' ./scripts/notarize.sh '/absolute/build/pa
 ### 1.1.2 验证记录
 
 主应用和扩展的 arm64 / x86_64 构建、签名完整性、系统库依赖检查、打包解压与安装前检查均通过。Hardened Runtime 构建已在本机运行，主应用服务和桌面小组件缓存的同步记录一致。公证脚本会拒绝临时签名应用，已验证该保护。没有第二台 Mac / Intel 实机，因此没有声称完成跨设备实测或 Apple 公证。
+
+## 日常维护
+
+源码与版本历史以私有仓库 [chz777123/codex-quota-widget](https://github.com/chz777123/codex-quota-widget) 为准；安装包从 [GitHub Releases](https://github.com/chz777123/codex-quota-widget/releases) 获取。
+
+每次维护先确认工作区状态，再 `git pull --ff-only`；修改并完成相关验证后，提交并 `git push`。存在未提交修改或分叉时先安全处理，不使用强制覆盖。只保留一个本地工作目录，不长期保留源码备份和重复构建包。详细约定见 [AGENTS.md](AGENTS.md)。
