@@ -1,6 +1,7 @@
 import SwiftUI
 import WidgetKit
 import AppKit
+import UniformTypeIdentifiers
 
 @MainActor
 final class ApplicationDelegate: NSObject, NSApplicationDelegate {
@@ -28,6 +29,9 @@ final class QuotaModel: ObservableObject {
     @Published var snapshot = SnapshotStore.read()
     @Published var busy = false
     @Published var message: String?
+    @Published var resolvedPath: String?
+    @Published var selectionError: String?
+    private var refreshPending = false
     private let server = LocalQuotaServer()
     private var polling: Task<Void, Never>?
     func start() {
@@ -42,20 +46,56 @@ final class QuotaModel: ObservableObject {
         }
     }
     func refresh() async {
-        guard !busy else { return }
+        guard !busy else { refreshPending = true; return }
         busy = true
         defer { busy = false }
-        let result = await Task.detached { () -> Result<Snapshot, Error> in Result { try CodexClient.fetch() } }.value
-        switch result {
-        case .success(let value): snapshot = value; message = value.error
-        case .failure(let error):
-            snapshot.error = error.localizedDescription
-            message = error.localizedDescription
-        }
-        server.update(snapshot)
-        do { try SnapshotStore.write(snapshot); WidgetCenter.shared.reloadAllTimelines() }
-        catch { message = error.localizedDescription }
+        repeat {
+            refreshPending = false
+            do {
+                let executable = try CodexClient.executable()
+                resolvedPath = executable.path
+                let value = try await Task.detached { try CodexClient.fetch(executable: executable) }.value
+                snapshot = value
+                message = value.error
+            } catch {
+                if (try? CodexClient.executable()) == nil { resolvedPath = nil }
+                snapshot.error = error.localizedDescription
+                message = error.localizedDescription
+            }
+            server.update(snapshot)
+            do { try SnapshotStore.write(snapshot); WidgetCenter.shared.reloadAllTimelines() }
+            catch { message = error.localizedDescription }
+        } while refreshPending
     }
+    func selectLocation(application: Bool) {
+        let panel = NSOpenPanel()
+        panel.title = application ? "选择 ChatGPT 或 Codex 应用" : "选择 codex 可执行文件"
+        panel.prompt = "选择"
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.treatsFilePackagesAsDirectories = !application
+        if application { panel.allowedContentTypes = [.applicationBundle] }
+        panel.directoryURL = URL(fileURLWithPath: "/Applications")
+        panel.begin { [weak self] response in
+            guard response == .OK, let url = panel.url else { return }
+            Task { @MainActor in self?.saveLocation(url.path) }
+        }
+    }
+    func saveLocation(_ path: String) {
+        do {
+            _ = try CodexLocation.executable(custom: path)
+            UserDefaults.standard.set(path, forKey: "codexPath")
+            selectionError = nil
+            Task { await refresh() }
+        } catch { selectionError = error.localizedDescription }
+    }
+    func restoreAutomaticLocation() {
+        UserDefaults.standard.removeObject(forKey: "codexPath")
+        selectionError = nil
+        Task { await refresh() }
+    }
+
 }
 struct Dashboard: View {
     @ObservedObject var model: QuotaModel
@@ -64,6 +104,7 @@ struct Dashboard: View {
     @AppStorage("hideMenuBarIcon") private var hideMenuBarIcon = false
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     var body: some View {
+        ScrollView {
         VStack(alignment: .leading, spacing: 24) {
             HStack {
                 VStack(alignment: .leading, spacing: 5) {
@@ -108,12 +149,36 @@ struct Dashboard: View {
             }
             DisclosureGroup("连接设置") {
                 VStack(alignment: .leading, spacing: 8) {
-                    TextField("自动查找 Codex（可填写完整路径）", text: $codexPath)
+                    Text(codexPath.isEmpty ? "自动查找" : "手动选择").font(.caption.bold())
+                    if !codexPath.isEmpty {
+                        Text("已选：" + codexPath).font(.caption).textSelection(.enabled)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    HStack {
+                        Button("选择应用…") { model.selectLocation(application: true) }
+                        Button("选择可执行文件…") { model.selectLocation(application: false) }
+                    }.controlSize(.small)
+                    Button("恢复自动查找") { model.restoreAutomaticLocation() }
+                        .controlSize(.small).disabled(codexPath.isEmpty)
+                    if let path = model.resolvedPath {
+                        Text("使用中：" + path).font(.caption).textSelection(.enabled)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Text(model.busy ? "正在同步…" : (model.message == nil && model.snapshot.error == nil ? "连接正常" : "同步失败"))
+                        .font(.caption)
+                    if let date = model.snapshot.fetchedAt {
+                        Text("最近成功：" + date.formatted(date: .abbreviated, time: .standard)).font(.caption)
+                    }
+                    if let error = model.selectionError {
+                        Text(error).font(.caption).foregroundStyle(.red)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                     Text("使用本机 Codex 已登录的账号。配套应用需保持运行；退出后小组件显示上次同步数据。")
                         .font(.caption).foregroundStyle(.secondary)
                 }.padding(.top, 8)
             }
         }.padding(28).frame(width: 410)
+        }.frame(width: 410, height: min(760, (NSScreen.main?.visibleFrame.height ?? 860) - 100))
     }
 }
 struct DashboardRoot: View {

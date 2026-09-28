@@ -3,22 +3,19 @@ import Foundation
 // Only initialize and account/rateLimits/read. No inference, resets or credential extraction.
 enum CodexClient {
     static func executable() throws -> URL {
-        let custom = UserDefaults.standard.string(forKey: "codexPath") ?? ""
-        let paths = [custom, "/Applications/Codex.app/Contents/Resources/codex", "/Applications/ChatGPT.app/Contents/Resources/codex", "/opt/homebrew/bin/codex", "/usr/local/bin/codex"]
-        guard let path = paths.first(where: { !$0.isEmpty && FileManager.default.isExecutableFile(atPath: $0) }) else {
-            throw failure("找不到 Codex。请安装 Codex，或在设置中选择可执行文件。")
-        }
-        return URL(fileURLWithPath: path)
+        try CodexLocation.executable(custom: UserDefaults.standard.string(forKey: "codexPath") ?? "")
     }
+
     static func failure(_ message: String) -> NSError { NSError(domain: "CodexQuota", code: 1, userInfo: [NSLocalizedDescriptionKey: message]) }
-    static func fetch() throws -> Snapshot {
+    static func fetch(executable: URL? = nil) throws -> Snapshot {
         let process = Process(), input = Pipe(), output = Pipe()
-        process.executableURL = try executable()
+        process.executableURL = try executable ?? self.executable()
         process.arguments = ["app-server"]
         process.standardInput = input
         process.standardOutput = output
         process.standardError = FileHandle.nullDevice
-        try process.run()
+        do { try process.run() }
+        catch { throw failure("Codex 启动失败：\(error.localizedDescription)。请重新选择有效的应用或可执行文件。") }
         let timeout = DispatchWorkItem { if process.isRunning { process.terminate() } }
         DispatchQueue.global().asyncAfter(deadline: .now() + 20, execute: timeout)
         defer {
@@ -49,7 +46,8 @@ enum CodexClient {
                 } else if id == 2, let result = object["result"] {
                     let data = try JSONSerialization.data(withJSONObject: result)
                     let limits = try JSONDecoder().decode(LimitsResponse.self, from: data)
-                    return Snapshot(fetchedAt: Date(), weekly: limits.codex?.weekly, error: limits.codex?.weekly == nil ? "服务暂未提供每周额度" : nil)
+                    guard let weekly = limits.codex?.weekly else { throw failure("额度读取失败：服务暂未提供每周额度。") }
+                    return Snapshot(fetchedAt: Date(), weekly: weekly, error: nil)
                 }
             }
         }
