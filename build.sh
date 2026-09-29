@@ -14,8 +14,8 @@ cp Assets/AppIcon-rounded.icns "$EXT/Contents/Resources/QuotaAppIcon-v6.icns"
 python3 scripts/metadata.py "$APP" "$EXT" "$APP_GROUP" "$BUILD_DIR"
 for arch in arm64 x86_64; do
     mkdir -p "$BUILD_DIR/$arch"
-    xcrun swiftc -swift-version 5 -parse-as-library -O -target "$arch-apple-macos26.0" Sources/Quota.swift Sources/CodexClient.swift Sources/CodexLocation.swift Sources/LocalQuotaServer.swift Sources/QuotaView.swift Sources/QuotaApp.swift -o "$BUILD_DIR/$arch/CodexQuota"
-    xcrun swiftc -swift-version 5 -parse-as-library -application-extension -Xlinker -e -Xlinker _NSExtensionMain -O -target "$arch-apple-macos26.0" Sources/Quota.swift Sources/QuotaView.swift Sources/QuotaWidget.swift -o "$BUILD_DIR/$arch/CodexQuotaWidget"
+    xcrun swiftc -swift-version 5 -parse-as-library -O -target "$arch-apple-macos26.0" Sources/Quota.swift Sources/DailyUsage.swift Sources/UsageReader.swift Sources/CodexClient.swift Sources/CodexLocation.swift Sources/LocalQuotaServer.swift Sources/QuotaView.swift Sources/QuotaModel.swift Sources/DailyUsageDetails.swift Sources/QuotaApp.swift -o "$BUILD_DIR/$arch/CodexQuota"
+    xcrun swiftc -swift-version 5 -parse-as-library -application-extension -Xlinker -e -Xlinker _NSExtensionMain -O -target "$arch-apple-macos26.0" Sources/Quota.swift Sources/DailyUsage.swift Sources/QuotaView.swift Sources/QuotaWidget.swift -o "$BUILD_DIR/$arch/CodexQuotaWidget"
 done
 xcrun lipo -create "$BUILD_DIR/arm64/CodexQuota" "$BUILD_DIR/x86_64/CodexQuota" -output "$APP/Contents/MacOS/CodexQuota"
 xcrun lipo -create "$BUILD_DIR/arm64/CodexQuotaWidget" "$BUILD_DIR/x86_64/CodexQuotaWidget" -output "$EXT/Contents/MacOS/CodexQuotaWidget"

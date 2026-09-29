@@ -4,9 +4,9 @@ macOS 26+ / arm64 + x86_64 原生 SwiftUI 应用与 WidgetKit 桌面小组件。
 
 ## 当前版本
 
-1.1.2（build 9）。修复新版 ChatGPT 内置 Codex 路径变化；连接设置使用 macOS 原生选择窗口，支持选择应用或 CLI，详见「安装说明.md」。
+1.2.0（build 10）。新增本机今日 token 与缓存命中率，主窗口和两种桌面组件均展示三指标。支持独立选择 Codex 数据目录；完整口径见「安装说明.md」。
 
-应用保持运行时每 5 分钟同步，可关闭窗口继续后台运行。小组件刷新由 macOS 调度，可能晚于应用同步。
+应用保持运行时每 5 分钟同步周额度、每分钟更新本机统计，可关闭窗口继续后台运行。小组件刷新由 macOS 调度，可能晚于应用同步。
 
 ## 功能
 
@@ -80,3 +80,13 @@ NOTARY_PROFILE='your-existing-profile' ./scripts/notarize.sh '/absolute/build/pa
 源码与版本历史以私有仓库 [chz777123/codex-quota-widget](https://github.com/chz777123/codex-quota-widget) 为准；安装包从 [GitHub Releases](https://github.com/chz777123/codex-quota-widget/releases) 获取。
 
 每次维护先确认工作区状态，再 `git pull --ff-only`；修改并完成相关验证后，提交并 `git push`。存在未提交修改或分叉时先安全处理，不使用强制覆盖。只保留一个本地工作目录，不长期保留源码备份和重复构建包。详细约定见 [AGENTS.md](AGENTS.md)。
+
+## 1.2.0 数据统计与验证
+
+`UsageReader` 在后台读取所选目录的 sessions / archived_sessions，保存仅含数值的增量索引；`DailyUsage` 随 Snapshot 通过既有 loopback 接口传递。周额度与本地统计各自刷新和报告错误，旧版快照可继续解码。索引保留最近 72 小时的事件及每文件累计基线，支持跨日及当前时区重新归日。复制/回放事件按时间及计数指纹去重；累计计数回退或基线缺失时使用明确单次值，并标记无法确认部分。
+
+测试覆盖日期与时区边界、重复/分叉/归档、截断/同大小改写、半行续写、累计重置、缺失字段、零输入、增量/重算/重启等价，以及周额度请求失败时今日统计仍更新。SwiftUI 离屏预览检查正常/长数字/缺失/部分统计、深浅色和着色模式。桌面材质及 WidgetKit 刷新时机仍由系统决定。
+
+本机一次约 710 MB 日志全量扫描耗时 24.5 秒，无变化的增量检查约 0.04 秒。扫描时点的输入、输出和缓存计数与独立 Python 全日志计算一致；这些是该机器一次测量，不是跨设备性能保证。
+
+可复现的开发检查脚本：`scripts/CheckLocalUsage.swift`（只输出汇总数字）、`scripts/RenderUsagePreview.swift`（明确标注示例数据，不使用真实对话）。生成的索引、截图和编译产物不纳入源码仓库。

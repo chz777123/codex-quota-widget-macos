@@ -25,6 +25,10 @@ struct Provider: TimelineProvider {
         let now = Date()
         var dates = [now, now.addingTimeInterval(1801)]
         if let reset = snapshot.weekly?.reset, reset > now { dates.append(reset) }
+        if let midnight = Calendar.current.dateInterval(of: .day, for: now)?.end { dates.append(midnight) }
+        if let updated = snapshot.dailyUsage?.updatedAt, updated.addingTimeInterval(181) > now {
+            dates.append(updated.addingTimeInterval(181))
+        }
         let entries = dates.sorted().map { QuotaEntry(date: $0, snapshot: snapshot) }
         completion(Timeline(entries: entries, policy: .after(now.addingTimeInterval(900))))
         }
@@ -44,7 +48,7 @@ struct QuotaWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "CodexWeeklyQuota", provider: Provider()) { entry in WidgetContent(entry: entry) }
             .configurationDisplayName("Codex 周额度")
-            .description("查看每周剩余额度与重置时间。打开配套应用以保持同步。")
+            .description("每周剩余额度、本机今日 token 与缓存命中率。打开配套应用以保持同步。")
             .supportedFamilies([.systemSmall, .systemMedium])
     }
 }

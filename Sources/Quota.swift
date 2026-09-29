@@ -27,8 +27,16 @@ struct Snapshot: Codable {
     var fetchedAt: Date?
     var weekly: LimitWindow?
     var error: String?
+    var dailyUsage: DailyUsage?
     static let empty = Snapshot(error: "打开 Codex 周额度以同步")
-    static let preview = Snapshot(fetchedAt: Date(), weekly: LimitWindow(usedPercent: 28, windowDurationMins: 10080, resetsAt: Date().addingTimeInterval(3 * 86400).timeIntervalSince1970))
+    static var preview: Snapshot {
+        let now = Date()
+        return Snapshot(fetchedAt: now,
+                        weekly: LimitWindow(usedPercent: 28, windowDurationMins: 10080, resetsAt: now.addingTimeInterval(3 * 86400).timeIntervalSince1970),
+                        dailyUsage: DailyUsage(day: DailyUsage.dayKey(now), timeZone: TimeZone.current.identifier,
+                                               inputTokens: 2_350_000, outputTokens: 130_000, cachedInputTokens: 1_950_500,
+                                               updatedAt: now, isComplete: true))
+    }
     func expired(at date: Date) -> Bool { weekly?.reset.map { $0 <= date } ?? false }
     func stale(at date: Date) -> Bool { fetchedAt.map { date.timeIntervalSince($0) > 1800 } ?? true }
     func remaining(at date: Date) -> Double? { expired(at: date) ? nil : weekly?.remaining }

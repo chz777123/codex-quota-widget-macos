@@ -24,82 +24,10 @@ enum ApplicationArtwork {
     }
 }
 
-@MainActor
-final class QuotaModel: ObservableObject {
-    @Published var snapshot = SnapshotStore.read()
-    @Published var busy = false
-    @Published var message: String?
-    @Published var resolvedPath: String?
-    @Published var selectionError: String?
-    private var refreshPending = false
-    private let server = LocalQuotaServer()
-    private var polling: Task<Void, Never>?
-    func start() {
-        if let icon = ApplicationArtwork.image { NSApp.applicationIconImage = icon }
-        guard polling == nil else { return }
-        do { try server.start(snapshot: snapshot) } catch { message = "无法启动本机同步服务：\(error.localizedDescription)" }
-        polling = Task {
-            while !Task.isCancelled {
-                await refresh()
-                do { try await Task.sleep(for: .seconds(300)) } catch { break }
-            }
-        }
-    }
-    func refresh() async {
-        guard !busy else { refreshPending = true; return }
-        busy = true
-        defer { busy = false }
-        repeat {
-            refreshPending = false
-            do {
-                let executable = try CodexClient.executable()
-                resolvedPath = executable.path
-                let value = try await Task.detached { try CodexClient.fetch(executable: executable) }.value
-                snapshot = value
-                message = value.error
-            } catch {
-                if (try? CodexClient.executable()) == nil { resolvedPath = nil }
-                snapshot.error = error.localizedDescription
-                message = error.localizedDescription
-            }
-            server.update(snapshot)
-            do { try SnapshotStore.write(snapshot); WidgetCenter.shared.reloadAllTimelines() }
-            catch { message = error.localizedDescription }
-        } while refreshPending
-    }
-    func selectLocation(application: Bool) {
-        let panel = NSOpenPanel()
-        panel.title = application ? "选择 ChatGPT 或 Codex 应用" : "选择 codex 可执行文件"
-        panel.prompt = "选择"
-        panel.canChooseFiles = true
-        panel.canChooseDirectories = false
-        panel.allowsMultipleSelection = false
-        panel.treatsFilePackagesAsDirectories = !application
-        if application { panel.allowedContentTypes = [.applicationBundle] }
-        panel.directoryURL = URL(fileURLWithPath: "/Applications")
-        panel.begin { [weak self] response in
-            guard response == .OK, let url = panel.url else { return }
-            Task { @MainActor in self?.saveLocation(url.path) }
-        }
-    }
-    func saveLocation(_ path: String) {
-        do {
-            _ = try CodexLocation.executable(custom: path)
-            UserDefaults.standard.set(path, forKey: "codexPath")
-            selectionError = nil
-            Task { await refresh() }
-        } catch { selectionError = error.localizedDescription }
-    }
-    func restoreAutomaticLocation() {
-        UserDefaults.standard.removeObject(forKey: "codexPath")
-        selectionError = nil
-        Task { await refresh() }
-    }
-
-}
 struct Dashboard: View {
     @ObservedObject var model: QuotaModel
     @AppStorage("codexPath") private var codexPath = ""
+    @AppStorage("codexDataPath") private var codexDataPath = ""
     @AppStorage("hideDockIcon") private var hideDockIcon = false
     @AppStorage("hideMenuBarIcon") private var hideMenuBarIcon = false
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
@@ -121,12 +49,13 @@ struct Dashboard: View {
             QuotaView(snapshot: model.snapshot).padding(24)
                 .background(reduceTransparency ? Color(nsColor: .controlBackgroundColor) : Color.clear, in: RoundedRectangle(cornerRadius: 26))
                 .glassEffect(.regular, in: .rect(cornerRadius: 26))
+            DailyUsageDetails(usage: model.snapshot.dailyUsage, refreshing: model.dailyBusy)
             HStack {
                 Button { Task { await model.refresh() } } label: {
                     Label(model.busy ? "正在同步…" : "立即同步", systemImage: "arrow.clockwise")
                 }.buttonStyle(.glassProminent).disabled(model.busy)
                 Spacer()
-                Text("每 5 分钟自动同步").font(.caption).foregroundStyle(.secondary)
+                Text("用量 1 分钟 · 额度 5 分钟").font(.caption).foregroundStyle(.secondary)
             }
             if let message = model.message { Text(message).font(.callout).foregroundStyle(.secondary).textSelection(.enabled) }
             Divider()
@@ -173,6 +102,16 @@ struct Dashboard: View {
                         Text(error).font(.caption).foregroundStyle(.red)
                             .fixedSize(horizontal: false, vertical: true)
                     }
+                    Divider()
+                    Text("用量数据目录").font(.caption.bold())
+                    Text(UsageReader.root(custom: codexDataPath).path).font(.caption)
+                        .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                    HStack {
+                        Button("选择数据目录…") { model.selectDataDirectory() }
+                        Button("恢复默认") { model.restoreDataDirectory() }.disabled(codexDataPath.isEmpty)
+                    }.controlSize(.small)
+                    Text("选择含 sessions 或 archived_sessions 的 Codex 目录；与程序路径分别保存。")
+                        .font(.caption).foregroundStyle(.secondary)
                     Text("使用本机 Codex 已登录的账号。配套应用需保持运行；退出后小组件显示上次同步数据。")
                         .font(.caption).foregroundStyle(.secondary)
                 }.padding(.top, 8)
@@ -195,6 +134,12 @@ struct DashboardRoot: View {
                 }
             }
             .task { model.start() }
+            .onReceive(NotificationCenter.default.publisher(for: .NSSystemTimeZoneDidChange)) { _ in
+                Task { await model.refreshDaily() }
+            }
+            .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didWakeNotification)) { _ in
+                Task { await model.refresh() }
+            }
             .onChange(of: hideDockIcon, initial: true) { _, hidden in
                 delegate.applyDockVisibility(hidden: hidden)
             }
