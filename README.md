@@ -77,7 +77,7 @@ NOTARY_PROFILE='your-existing-profile' ./scripts/notarize.sh '/absolute/build/pa
 
 ## 日常维护
 
-源码与版本历史以私有仓库 [chz777123/codex-quota-widget](https://github.com/chz777123/codex-quota-widget) 为准；安装包从 [GitHub Releases](https://github.com/chz777123/codex-quota-widget/releases) 获取。
+源码与版本历史以公开仓库 [chz777123/codex-quota-widget-macos](https://github.com/chz777123/codex-quota-widget-macos) 为准；安装包从 [GitHub Releases](https://github.com/chz777123/codex-quota-widget-macos/releases) 获取。
 
 每次维护先确认工作区状态，再 `git pull --ff-only`；修改并完成相关验证后，提交并 `git push`。存在未提交修改或分叉时先安全处理，不使用强制覆盖。只保留一个本地工作目录，不长期保留源码备份和重复构建包。详细约定见 [AGENTS.md](AGENTS.md)。
 

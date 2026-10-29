@@ -1,7 +1,7 @@
 # Codex 周额度维护约定
 
-GitHub 私有仓库是源码和版本历史的权威来源：
-https://github.com/chz777123/codex-quota-widget
+GitHub 公开仓库是源码和版本历史的权威来源：
+https://github.com/chz777123/codex-quota-widget-macos
 
 ## 每次维护
 
@@ -17,4 +17,4 @@ https://github.com/chz777123/codex-quota-widget
 - 不保留长期源码备份、重复安装包或构建缓存。通过 Git 历史回溯源码，通过 GitHub Releases 获取安装包。
 - 清理仅限已确认属于本项目且不再使用的文件。不要删除未提交改动、其他项目内容、登录凭据或运行数据。
 - 凭据使用 GitHub CLI/系统凭据助手；不得写入代码、文档、远端 URL 或发行包。
-- 仓库及 Releases 保持私有，除非用户明确要求改变可见性。
+- 仓库及 Releases 按用户要求保持公开；凭据、个人配置和本机用量数据不得进入仓库或发行包。
