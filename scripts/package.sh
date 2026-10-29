@@ -19,7 +19,7 @@ trap 'rm -rf "$stage"' EXIT
 mkdir "$stage/CodexQuota-安装包"
 ditto "$app" "$stage/CodexQuota-安装包/Codex 周额度.app"
 cp 安装说明.md "$stage/CodexQuota-安装包/README.md"
-cp 安装.command 刷新小组件.command "$stage/CodexQuota-安装包/"
+cp 安装.command 刷新小组件.command 检查小组件.command "$stage/CodexQuota-安装包/"
 chmod 755 "$stage/CodexQuota-安装包/"*.command
 # Package only the allowlisted application and instructions, never preferences, caches or accounts.
 ditto -c -k --sequesterRsrc --keepParent "$stage/CodexQuota-安装包" "$stage/package.zip"

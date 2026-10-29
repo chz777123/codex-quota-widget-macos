@@ -4,7 +4,7 @@ macOS 26+ / arm64 + x86_64 原生 SwiftUI 应用与 WidgetKit 桌面小组件。
 
 ## 当前版本
 
-1.2.0（build 10）。新增本机今日 token 与缓存命中率，主窗口和两种桌面组件均展示三指标。支持独立选择 Codex 数据目录；完整口径见「安装说明.md」。
+1.2.1（build 11）。新增本机今日 token 与缓存命中率，主窗口和两种桌面组件均展示三指标。支持独立选择 Codex 数据目录；完整口径见「安装说明.md」。
 
 应用保持运行时每 5 分钟同步周额度、每分钟更新本机统计，可关闭窗口继续后台运行。小组件刷新由 macOS 调度，可能晚于应用同步。
 
@@ -90,3 +90,10 @@ NOTARY_PROFILE='your-existing-profile' ./scripts/notarize.sh '/absolute/build/pa
 本机一次约 710 MB 日志全量扫描耗时 24.5 秒，无变化的增量检查约 0.04 秒。扫描时点的输入、输出和缓存计数与独立 Python 全日志计算一致；这些是该机器一次测量，不是跨设备性能保证。
 
 可复现的开发检查脚本：`scripts/CheckLocalUsage.swift`（只输出汇总数字）、`scripts/RenderUsagePreview.swift`（明确标注示例数据，不使用真实对话）。生成的索引、截图和编译产物不纳入源码仓库。
+
+
+## 1.2.1 macOS 27.2 小组件注册修复
+
+如果应用仍有数据但「编辑小组件」里找不到 Codex 周额度，先运行包内的「检查小组件.command」。它只检查应用位置、Bundle ID、代码签名和 PlugInKit 注册状态。若显示“扩展未注册”，运行「刷新小组件.command」：它会完整检查、重新登记 Launch Services 与 WidgetKit 扩展、重新打开应用并请求刷新，不会删除任何全局 WidgetKit 缓存。
+
+macOS 27.2 下若 PlugInKit 返回 `Connection invalid`，这是系统注册服务暂不可用；请注销并重新登录或重启 Mac 后再次运行刷新工具。若显示“已注册”但列表暂时没有，关闭并重新打开桌面「编辑小组件」面板。
