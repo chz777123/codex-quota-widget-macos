@@ -48,7 +48,7 @@ struct QuotaWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "CodexWeeklyQuota", provider: Provider()) { entry in WidgetContent(entry: entry) }
             .configurationDisplayName("Codex 周额度")
-            .description("每周剩余额度、本机今日 token 与缓存命中率。打开配套应用以保持同步。")
+            .description("每周剩余额度、本机今日 token、缓存率与输出速度。打开配套应用以保持同步。")
             .supportedFamilies([.systemSmall, .systemMedium])
     }
 }

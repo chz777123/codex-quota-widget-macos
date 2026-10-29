@@ -29,7 +29,7 @@ import AppKit
         partial.dailyUsage?.isComplete = false
         partial.dailyUsage?.error = "部分统计 · 有记录缺失或不可读"
         let content = VStack(alignment: .leading, spacing: 22) {
-            Text("Codex · 速度与四指标布局检查").font(.title2.bold())
+            Text("Codex · 极简仪表盘布局检查").font(.title2.bold())
             Text("全部为示例数据 · 离屏预览；实际液态玻璃材质由 macOS 桌面渲染").font(.caption).foregroundStyle(.secondary)
             HStack(alignment: .top, spacing: 28) {
                 VStack(alignment: .leading, spacing: 16) {

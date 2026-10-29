@@ -20,93 +20,157 @@ struct QuotaView: View {
         }
         return nil
     }
-    private var cacheText: String {
-        today?.cacheHitRate.map { String(format: "%.1f%%", $0) } ?? "—"
+    private var cacheText: String { today?.cacheHitRate.map { String(format: "%.1f%%", $0) } ?? "—" }
+    private var speedText: String {
+        guard let speed = today?.latestOutputTokensPerSecond, speed.isFinite, speed > 0 else { return "—" }
+        return TokenFormat.speed(speed) + " tok/s"
     }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: compact ? 5 : 8) {
-            HStack(spacing: 5) {
-                Image(systemName: "terminal.fill").widgetAccentable()
-                Text("Codex").fontWeight(.semibold)
+        VStack(alignment: .leading, spacing: compact ? 7 : 8) {
+            brandBar
+            if compact { smallLayout } else { mediumLayout }
+            statusBar
+        }
+        .privacySensitive()
+    }
+
+    private var brandBar: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "terminal.fill").widgetAccentable()
+            Text("Codex").fontWeight(.semibold)
+            Spacer(minLength: 0)
+            Image(systemName: warning == nil ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                .foregroundStyle(warning == nil ? Color.secondary : Color.orange)
+            Text(compact ? "周额度" : "用量概览").foregroundStyle(.secondary)
+        }
+        .font(.system(size: compact ? 11 : 12))
+        .lineLimit(1)
+    }
+
+    private var smallLayout: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                quotaNumber(size: 34)
                 Spacer(minLength: 0)
-                Text(compact ? "周额度" : "用量概览").foregroundStyle(.secondary)
-            }.font(.system(size: compact ? 11 : 12))
-            if compact {
-                HStack(alignment: .firstTextBaseline, spacing: 3) {
-                    quotaNumber(size: 34)
-                    Spacer(minLength: 0)
-                    Text("剩余").font(.system(size: 10)).foregroundStyle(.secondary)
+                Text("本周剩余").font(.system(size: 9)).foregroundStyle(.secondary)
+            }
+            progress
+            Divider().opacity(0.45)
+            Text("本机今日").font(.system(size: 9, weight: .medium)).foregroundStyle(.secondary)
+            HStack(alignment: .center, spacing: 7) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(TokenFormat.compact(today?.totalTokens))
+                        .font(.system(size: 23, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.65)
+                    Text("今日 token").font(.system(size: 9)).foregroundStyle(.secondary)
                 }
-                progress
-                Text("本机今日").font(.system(size: 9)).foregroundStyle(.secondary)
-                HStack(alignment: .top, spacing: 8) {
-                    metric("今日 token", value: TokenFormat.compact(today?.totalTokens), size: 16)
-                    Spacer(minLength: 0)
-                    metric("缓存率", value: cacheText, size: 16)
-                    Spacer(minLength: 0)
-                    metric("速度 tok/s", value: TokenFormat.speed(today?.latestOutputTokensPerSecond), size: 14)
-                }
-            } else {
-                HStack(alignment: .center, spacing: 20) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("本周剩余").font(.system(size: 11)).foregroundStyle(.secondary)
-                        quotaNumber(size: 46)
-                        progress
-                    }.frame(maxWidth: .infinity, alignment: .leading)
-                    Rectangle().fill(.primary.opacity(0.10)).frame(width: 1, height: 83)
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text("本机今日").font(.system(size: 10)).foregroundStyle(.secondary)
-                        HStack(alignment: .firstTextBaseline, spacing: 5) {
-                            Text(TokenFormat.compact(today?.totalTokens)).font(.system(size: 23, weight: .semibold, design: .rounded)).monospacedDigit()
-                            Text("token").font(.system(size: 10)).foregroundStyle(.secondary)
-                        }.lineLimit(1).minimumScaleFactor(0.7)
-                        HStack(alignment: .firstTextBaseline, spacing: 5) {
-                            Text(cacheText).font(.system(size: 19, weight: .medium, design: .rounded)).monospacedDigit()
-                            Text("缓存率").font(.system(size: 10)).foregroundStyle(.secondary)
-                        }.lineLimit(1).minimumScaleFactor(0.7)
-                        HStack(alignment: .firstTextBaseline, spacing: 5) {
-                            Text(TokenFormat.speed(today?.latestOutputTokensPerSecond)).font(.system(size: 19, weight: .medium, design: .rounded)).monospacedDigit()
-                            Text("tok/s").font(.system(size: 10)).foregroundStyle(.secondary)
-                        }.lineLimit(1).minimumScaleFactor(0.7)
-                    }.frame(maxWidth: .infinity, alignment: .leading)
+                Spacer(minLength: 0)
+                VStack(alignment: .trailing, spacing: 4) {
+                    compactMetric(value: cacheText, label: "缓存率")
+                    compactMetric(value: speedText, label: "输出速度")
                 }
             }
-            HStack(spacing: 3) {
-                if let warning {
-                    Image(systemName: "exclamationmark.circle")
-                    Text(warning)
-                } else if let reset = snapshot.weekly?.reset {
-                    Text(reset, format: compact ? .dateTime.month().day() : .dateTime.month().day().hour().minute())
-                    Text("重置")
-                } else { Text("打开应用以同步") }
-                if !compact, let updated = today?.updatedAt {
-                    Spacer(minLength: 2)
-                    Text("更新 \(updated.formatted(date: .omitted, time: .shortened))")
-                }
-            }.font(.system(size: compact ? 9 : 10)).foregroundStyle(.secondary)
-                .lineLimit(1).minimumScaleFactor(0.8)
-        }.privacySensitive()
+        }
     }
+
+    private var mediumLayout: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(alignment: .center, spacing: 15) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("本周剩余").font(.system(size: 10)).foregroundStyle(.secondary)
+                    quotaNumber(size: 43)
+                    progress
+                    if let reset = snapshot.weekly?.reset {
+                        Text(reset, format: .dateTime.month().day().hour().minute())
+                            .font(.system(size: 9)).foregroundStyle(.secondary)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                Rectangle().fill(.primary.opacity(0.10)).frame(width: 1, height: 84)
+
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("本机今日").font(.system(size: 10, weight: .medium)).foregroundStyle(.secondary)
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                        Text(TokenFormat.compact(today?.totalTokens))
+                            .font(.system(size: 23, weight: .semibold, design: .rounded))
+                            .monospacedDigit()
+                        Text("token").font(.system(size: 9)).foregroundStyle(.secondary)
+                    }.lineLimit(1).minimumScaleFactor(0.65)
+                    HStack(alignment: .firstTextBaseline, spacing: 5) {
+                        Text(cacheText).font(.system(size: 17, weight: .medium, design: .rounded)).monospacedDigit()
+                        Text("缓存率").font(.system(size: 9)).foregroundStyle(.secondary)
+                    }.lineLimit(1).minimumScaleFactor(0.7)
+                    HStack(alignment: .firstTextBaseline, spacing: 5) {
+                        Text(speedText).font(.system(size: 17, weight: .medium, design: .rounded)).monospacedDigit()
+                        Text("最近").font(.system(size: 9)).foregroundStyle(.secondary)
+                    }.lineLimit(1).minimumScaleFactor(0.6)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+
+    private var statusBar: some View {
+        HStack(spacing: 3) {
+            if let warning {
+                Image(systemName: "exclamationmark.circle")
+                Text(warning)
+            } else if compact, let reset = snapshot.weekly?.reset {
+                Text(reset, format: .dateTime.month().day())
+                Text("重置")
+            } else {
+                Text("已同步")
+            }
+            if !compact, let updated = today?.updatedAt {
+                Spacer(minLength: 2)
+                Text("更新 \(updated.formatted(date: .omitted, time: .shortened))")
+            }
+        }
+        .font(.system(size: compact ? 9 : 10))
+        .foregroundStyle(warning == nil ? Color.secondary : Color.orange)
+        .lineLimit(1)
+        .minimumScaleFactor(0.75)
+    }
+
     private func quotaNumber(size: CGFloat) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 1) {
             Text(remaining.map { String(format: "%.0f", $0) } ?? "—")
-                .font(.system(size: size, weight: .semibold, design: .rounded)).monospacedDigit()
-            if remaining != nil { Text("%").font(.system(size: compact ? 16 : 20)).foregroundStyle(.secondary) }
-        }.lineLimit(1).minimumScaleFactor(0.7).widgetAccentable()
-            .accessibilityLabel(remaining.map { "本周剩余百分之\(Int($0))" } ?? "额度未知")
+                .font(.system(size: size, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+            if remaining != nil {
+                Text("%").font(.system(size: compact ? 15 : 19)).foregroundStyle(.secondary)
+            }
+        }
+        .lineLimit(1)
+        .minimumScaleFactor(0.7)
+        .widgetAccentable()
+        .accessibilityLabel(remaining.map { "本周剩余百分之\(Int($0))" } ?? "额度未知")
     }
+
     private var progress: some View {
         GeometryReader { geometry in
             ZStack(alignment: .leading) {
                 Capsule().fill(.primary.opacity(0.10))
                 Capsule().fill(tint).frame(width: geometry.size.width * (remaining ?? 0) / 100).widgetAccentable()
             }
-        }.frame(height: compact ? 3 : 4).accessibilityHidden(true)
+        }
+        .frame(height: compact ? 3 : 4)
+        .accessibilityHidden(true)
     }
-    private func metric(_ title: String, value: String, size: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: 1) {
-            Text(value).font(.system(size: size, weight: .semibold, design: .rounded)).monospacedDigit()
-            Text(title).font(.system(size: 9)).foregroundStyle(.secondary)
-        }.lineLimit(1).minimumScaleFactor(0.75).accessibilityElement(children: .combine)
+
+    private func compactMetric(value: String, label: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
+            Text(value)
+                .font(.system(size: 13, weight: .medium, design: .rounded))
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+            Text(label).font(.system(size: 8)).foregroundStyle(.secondary)
+        }
+        .accessibilityElement(children: .combine)
     }
 }
