@@ -19,6 +19,11 @@ struct DailyUsageDetails: View {
                 detail("输出", today?.outputTokens)
                 detail("缓存输入", today?.cachedInputTokens)
             }.frame(maxWidth: .infinity, alignment: .leading)
+            HStack(spacing: 14) {
+                detailText("今日平均", speedText(today?.averageOutputTokensPerSecond))
+                detailText("最近速度", speedText(today?.latestOutputTokensPerSecond))
+                detailText("有效样本", today?.speedSampleCount.map(String.init) ?? "—")
+            }.frame(maxWidth: .infinity, alignment: .leading)
             if let daily = today {
                 if let error = daily.error { Text(error).foregroundStyle(.orange) }
                 if daily.stale(at: date) { Text("数据较旧 · 点击立即同步").foregroundStyle(.secondary) }
@@ -31,6 +36,8 @@ struct DailyUsageDetails: View {
             }
             Text("输入＋输出；缓存已包含在输入中。缓存率＝缓存输入÷输入。按 Mac 当前时区统计所选目录内的记录，不代表跨设备账号总量，也不按账号拆分。")
                 .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            Text("速度按同一会话中相邻 token 事件计算，间隔超过 5 分钟不计入。")
+                .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }.font(.caption).monospacedDigit().textSelection(.enabled)
     }
     private func detail(_ label: String, _ count: Int64?) -> some View {
@@ -38,5 +45,15 @@ struct DailyUsageDetails: View {
             Text(label).foregroundStyle(.secondary)
             Text(exact(count)).fontWeight(.medium).lineLimit(1).minimumScaleFactor(0.7)
         }.frame(maxWidth: .infinity, alignment: .leading)
+    }
+    private func detailText(_ label: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(label).foregroundStyle(.secondary)
+            Text(value).fontWeight(.medium).lineLimit(1).minimumScaleFactor(0.7)
+        }.frame(maxWidth: .infinity, alignment: .leading)
+    }
+    private func speedText(_ value: Double?) -> String {
+        guard value != nil else { return "—" }
+        return TokenFormat.speed(value) + " tok/s"
     }
 }

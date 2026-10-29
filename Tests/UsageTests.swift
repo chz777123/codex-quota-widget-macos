@@ -24,6 +24,10 @@ import Foundation
             var d = try JSONSerialization.data(withJSONObject: ["timestamp": timestamp, "type": "event_msg", "payload": ["type": "token_count", "info": ["total_token_usage": total, "last_token_usage": last]]], options: [.sortedKeys])
             d.append(10); return d
         }
+        func session(_ id: String) throws -> Data {
+            var d = try JSONSerialization.data(withJSONObject: ["type": "session_meta", "payload": ["id": id]], options: [.sortedKeys])
+            d.append(10); return d
+        }
         func append(_ d: Data, _ url: URL) throws {
             let f = try FileHandle(forWritingTo: url); defer { try? f.close() }
             try f.seekToEnd(); try f.write(contentsOf: d)
@@ -108,9 +112,43 @@ import Foundation
         precondition(noCounts.totalTokens == nil && noCounts.cacheHitRate == nil && !noCounts.isComplete)
         let old = try JSONDecoder().decode(Snapshot.self, from: Data("{\"error\":\"old\"}".utf8))
         precondition(old.dailyUsage == nil)
+        let oldUsage = try JSONDecoder().decode(DailyUsage.self, from: Data("{\"day\":\"2026-09-29\",\"timeZone\":\"UTC\",\"inputTokens\":10,\"outputTokens\":2,\"cachedInputTokens\":1,\"isComplete\":true}".utf8))
+        precondition(oldUsage.averageOutputTokensPerSecond == nil && oldUsage.latestOutputTokensPerSecond == nil && oldUsage.speedSampleCount == nil)
         let cache = try String(contentsOf: temp.appendingPathComponent("daily.index"), encoding: .utf8)
         precondition(!cache.contains("last_token_usage") && !cache.contains("reasoning_output_tokens"))
         precondition(TokenFormat.compact(999_999) == "1M" && TokenFormat.compact(nil) == "—")
+        precondition(TokenFormat.speed(7.142857) == "7.1")
+        precondition(TokenFormat.speed(1_260) == "1.3K")
+        precondition(TokenFormat.speed(nil) == "—")
+
+        // Output speed uses only adjacent, same-session events and weights
+        // the daily average by valid elapsed seconds.
+        let (speedRoot, speedLog, speedReader) = try fixture("speed")
+        let s1 = try event("2026-09-29T00:00:00Z", counts(100, 100, 50), counts(100, 100, 50))
+        let s2 = try event("2026-09-29T00:00:10Z", counts(300, 300, 150), counts(200, 200, 100))
+        let s3 = try event("2026-09-29T00:01:10Z", counts(600, 600, 300), counts(300, 300, 150))
+        let zeroOutput = try event("2026-09-29T00:02:10Z", counts(610, 600, 305), counts(10, 0, 5))
+        let s4 = try event("2026-09-29T00:02:20Z", counts(710, 700, 355), counts(100, 100, 50))
+        let longGap = try event("2026-09-29T00:10:00Z", counts(810, 800, 405), counts(100, 100, 50))
+        try (s1 + s2 + s3 + zeroOutput + s4 + longGap).write(to: speedLog)
+        let speed = await speedReader.read(root: speedRoot, now: now, timeZone: utc)
+        precondition(speed.totalTokens == 1_610 && speed.speedSampleCount == 3)
+        precondition(abs((speed.averageOutputTokensPerSecond ?? 0) - (600.0 / 80.0)) < 0.0001)
+        precondition(abs((speed.latestOutputTokensPerSecond ?? 0) - 10.0) < 0.0001)
+
+        // A session change breaks the window; a replayed copy is deduped.
+        let sessionLog = speedRoot.appendingPathComponent("sessions/session.jsonl")
+        let q1 = try session("A")
+        let q2 = try event("2026-09-29T00:20:00Z", counts(900, 900, 450), counts(90, 100, 45))
+        let q3 = try session("B")
+        let q4 = try event("2026-09-29T00:20:10Z", counts(1_000, 1_000, 500), counts(100, 100, 50))
+        try (q1 + q2 + q3 + q4).write(to: sessionLog)
+        let sessionResult = await speedReader.read(root: speedRoot, now: now, timeZone: utc)
+        precondition(sessionResult.speedSampleCount == 3, "Cross-session events must not add a speed sample")
+        let replay = speedRoot.appendingPathComponent("sessions/replay.jsonl")
+        try (s1 + s2 + s3 + zeroOutput + s4 + longGap).write(to: replay)
+        let replayResult = await speedReader.read(root: speedRoot, now: now, timeZone: utc)
+        precondition(replayResult.speedSampleCount == sessionResult.speedSampleCount && replayResult.averageOutputTokensPerSecond == sessionResult.averageOutputTokensPerSecond)
         print("PASS: daily/timezone boundaries, weighted cache rate, replay/fork/duplicate/archival dedup, incremental/restart equivalence, truncation, resets, incomplete tails, missing cache, zero input, invalid roots, malformed records, old snapshots")
     }
 }

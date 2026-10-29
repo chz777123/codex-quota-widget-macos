@@ -9,6 +9,9 @@ struct DailyUsage: Codable, Equatable {
     var updatedAt: Date?
     var isComplete: Bool
     var error: String?
+    var averageOutputTokensPerSecond: Double? = nil
+    var latestOutputTokensPerSecond: Double? = nil
+    var speedSampleCount: Int? = nil
 
     static func dayKey(_ date: Date, timeZone: TimeZone = .current) -> String {
         var calendar = Calendar(identifier: .gregorian)
@@ -46,5 +49,15 @@ enum TokenFormat {
             return (result.hasSuffix(".0") ? String(result.dropLast(2)) : result) + suffix
         }
         return String(count)
+    }
+    static func speed(_ value: Double?) -> String {
+        guard let value, value.isFinite, value > 0 else { return "—" }
+        if value >= 1000 {
+            let n = value / 1000
+            let result = String(format: n >= 100 ? "%.0f" : "%.1f", locale: Locale(identifier: "en_US_POSIX"), n)
+            return (result.hasSuffix(".0") ? String(result.dropLast(2)) : result) + "K"
+        }
+        let result = String(format: value >= 100 ? "%.0f" : "%.1f", locale: Locale(identifier: "en_US_POSIX"), value)
+        return (result.hasSuffix(".0") ? String(result.dropLast(2)) : result)
     }
 }

@@ -38,6 +38,7 @@ actor UsageReader {
         var cached: Int64?
         var complete: Bool
         var derived: Bool
+        var sessionID: String?
     }
     private struct FileIndex: Codable {
         var identity: String
@@ -206,8 +207,11 @@ actor UsageReader {
                                         last?.input_tokens, last?.output_tokens, last?.cached_input_tokens]
                 let parts = [stamp] + numbers.map { $0.map { String($0) } ?? "?" }
                 // Session IDs can change on forks; replayed numerical events keep timestamp and counters.
+                let session = file.sessionID
+                // Keep the historical fingerprint stable so an existing v1
+                // index does not count a replay twice after this update.
                 let key = SHA256.hash(data: Data(parts.joined(separator: "|").utf8)).map { String(format: "%02x", $0) }.joined()
-                file.records.append(Record(key: key, date: date, input: input, output: output, cached: cached, complete: complete, derived: derived))
+                file.records.append(Record(key: key, date: date, input: input, output: output, cached: cached, complete: complete, derived: derived, sessionID: session))
             }
             if buffer.count > 16 * 1024 * 1024 {
                 file.offset += UInt64(buffer.count)
@@ -232,6 +236,7 @@ actor UsageReader {
         }
         var input: Int64 = 0, output: Int64 = 0, cached: Int64 = 0
         var cacheKnown = true, anyKnown = records.isEmpty, overflow = false
+        var speedOutput: Int64 = 0, speedDuration = 0.0, latestSpeed: Double?, speedSamples = 0
         func add(_ a: inout Int64, _ b: Int64) {
             let result = a.addingReportingOverflow(b)
             if result.overflow { overflow = true } else { a = result.partialValue }
@@ -242,13 +247,46 @@ actor UsageReader {
             else { complete = false; cacheKnown = false }
             if let c = record.cached { add(&cached, c) } else { cacheKnown = false }
         }
+        // Build speed windows from the same file/session while applying the
+        // same global event-key deduplication used for token totals. A
+        // copied/forked or archived log must not contribute a second window.
+        var speedFiles: [String: [Record]] = [:]
+        var speedKeys = Set<String>()
+        for (identity, file) in state.files.sorted(by: { $0.key < $1.key }) {
+            for record in file.records where record.date <= now && DailyUsage.dayKey(record.date, timeZone: zone) == day {
+                guard speedKeys.insert(record.key).inserted else { continue }
+                speedFiles[identity, default: []].append(record)
+            }
+        }
+        for fileRecords in speedFiles.values {
+            let dayRecords = fileRecords.sorted { $0.date < $1.date }
+            var previous: Record?
+            for record in dayRecords {
+                defer { previous = record }
+                guard let prior = previous,
+                      prior.sessionID == record.sessionID,
+                      let output = record.output, output > 0 else { continue }
+                let interval = record.date.timeIntervalSince(prior.date)
+                guard interval > 0, interval <= 300 else { continue }
+                let result = speedOutput.addingReportingOverflow(output)
+                guard !result.overflow else { overflow = true; continue }
+                speedOutput = result.partialValue
+                speedDuration += interval
+                latestSpeed = Double(output) / interval
+                speedSamples += 1
+            }
+        }
         // Unreadable files can hide cache data; do not present an apparently complete percentage.
         cacheKnown = cacheKnown && !incomplete
         complete = complete && !overflow
         let known = anyKnown && !overflow && !(records.isEmpty && !complete)
+        let averageSpeed = speedDuration > 0 && !overflow ? Double(speedOutput) / speedDuration : nil
         return DailyUsage(day: day, timeZone: zone.identifier,
                           inputTokens: known ? input : nil, outputTokens: known ? output : nil,
                           cachedInputTokens: known && cacheKnown ? cached : nil, updatedAt: now,
-                          isComplete: complete, error: complete ? nil : "部分统计 · 有记录缺失或不可读")
+                          isComplete: complete, error: complete ? nil : "部分统计 · 有记录缺失或不可读",
+                          averageOutputTokensPerSecond: averageSpeed,
+                          latestOutputTokensPerSecond: latestSpeed,
+                          speedSampleCount: speedSamples)
     }
 }

@@ -43,6 +43,8 @@ struct QuotaView: View {
                     metric("今日 token", value: TokenFormat.compact(today?.totalTokens), size: 16)
                     Spacer(minLength: 0)
                     metric("缓存率", value: cacheText, size: 16)
+                    Spacer(minLength: 0)
+                    metric("速度 tok/s", value: TokenFormat.speed(today?.latestOutputTokensPerSecond), size: 14)
                 }
             } else {
                 HStack(alignment: .center, spacing: 20) {
@@ -61,6 +63,10 @@ struct QuotaView: View {
                         HStack(alignment: .firstTextBaseline, spacing: 5) {
                             Text(cacheText).font(.system(size: 19, weight: .medium, design: .rounded)).monospacedDigit()
                             Text("缓存率").font(.system(size: 10)).foregroundStyle(.secondary)
+                        }.lineLimit(1).minimumScaleFactor(0.7)
+                        HStack(alignment: .firstTextBaseline, spacing: 5) {
+                            Text(TokenFormat.speed(today?.latestOutputTokensPerSecond)).font(.system(size: 19, weight: .medium, design: .rounded)).monospacedDigit()
+                            Text("tok/s").font(.system(size: 10)).foregroundStyle(.secondary)
                         }.lineLimit(1).minimumScaleFactor(0.7)
                     }.frame(maxWidth: .infinity, alignment: .leading)
                 }

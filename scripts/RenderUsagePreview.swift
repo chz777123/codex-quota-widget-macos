@@ -10,19 +10,26 @@ import AppKit
         var normal = Snapshot.preview
         normal.dailyUsage = DailyUsage(day: DailyUsage.dayKey(now), timeZone: TimeZone.current.identifier,
             inputTokens: 2_350_000, outputTokens: 130_000, cachedInputTokens: 1_950_500,
-            updatedAt: now, isComplete: true)
+            updatedAt: now, isComplete: true,
+            averageOutputTokensPerSecond: 87.4, latestOutputTokensPerSecond: 124.8, speedSampleCount: 18)
         var long = normal
         long.weekly = LimitWindow(usedPercent: 94, windowDurationMins: 10080, resetsAt: now.addingTimeInterval(86400).timeIntervalSince1970)
         long.dailyUsage?.inputTokens = 12_350_000_000
         long.dailyUsage?.cachedInputTokens = 12_349_000_000
+        long.dailyUsage?.averageOutputTokensPerSecond = 1_250.0
+        long.dailyUsage?.latestOutputTokensPerSecond = 8_420.0
+        long.dailyUsage?.speedSampleCount = 120
         var missing = normal
         missing.dailyUsage = nil
         var partial = normal
         partial.dailyUsage?.cachedInputTokens = nil
+        partial.dailyUsage?.averageOutputTokensPerSecond = nil
+        partial.dailyUsage?.latestOutputTokensPerSecond = nil
+        partial.dailyUsage?.speedSampleCount = 0
         partial.dailyUsage?.isComplete = false
         partial.dailyUsage?.error = "部分统计 · 有记录缺失或不可读"
         let content = VStack(alignment: .leading, spacing: 22) {
-            Text("Codex · 三指标布局检查").font(.title2.bold())
+            Text("Codex · 速度与四指标布局检查").font(.title2.bold())
             Text("全部为示例数据 · 离屏预览；实际液态玻璃材质由 macOS 桌面渲染").font(.caption).foregroundStyle(.secondary)
             HStack(alignment: .top, spacing: 28) {
                 VStack(alignment: .leading, spacing: 16) {
